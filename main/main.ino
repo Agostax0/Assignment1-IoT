@@ -1,97 +1,129 @@
 #include<stdlib.h>
 #include<avr/sleep.h>
 
+#define n_buttons 4
+#define n_leds 4
 
-#define T1 2
+#define T1 3
 #define T2 T1+1
 #define T3 T2+1
 #define T4 T3+1
 
-#define L1 6
+#define L1 7
 #define L2 L1+1
 #define L3 L2+1
 #define L4 L3+1
 
-#define L_ON 10
+#define L_ON 11
 #define POT A0
 
+#define Time1 700 //TODO implement macro
+#define Time2 100 //TODO implement macro
+#define Time3 10000 //TODO implement macro
+
 int factor;
-bool generatedPattern;
 bool gameStart;
-int score;
+bool generatedPattern;
+bool guessingPattern;
+int score = 0;
 int penalty;
-int *pattern;
+int pattern[4];
+int buttonPressed[4];
 int brightness;
 int fadeAmount;
+int patternCounter;
 void initializingVariables(){
-  //factor = ((int)(analogRead(POT)/256))+1;
-  //Serial.println(factor);
-  factor = 4;
-  pattern = (int*) malloc(sizeof(int)*factor);
-  generatedPattern = false;
+  factor = (analogRead(POT)/256)+1;
+  patternCounter=0;
   gameStart = false;
-  score = 0;
+  generatedPattern = false;
+  guessingPattern = false;
+
   penalty = 0;
   brightness = 0;
   fadeAmount = 15;
+
+  Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
 }
 void setup()
 {
   Serial.begin(9600);
   int i;
-  for(i=L1;i<L1+4;i++){
+  for(i=L1;i<L1+n_leds;i++){
     pinMode(i,OUTPUT);
   }
-  for(i=T1;i<T1+4;i++){
+  for(i=T1;i<T1+n_buttons;i++){
     pinMode(i,INPUT);
   }
   pinMode(L_ON,OUTPUT);
-
   initializingVariables();
-  Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
-  factor = 4;
+  
 }
-
 
 void loop()
 { 
   if(!gameStart){
+    //time0 = timeNow;
     do{
+      /*if(timeNow-time0>10sec){
+        attachInterrupt(0,wakeUpFunc,RISING); 
+        powernapTime();
+        break;
+      }*/
       waitingGameStart();
     }while(digitalRead(T1)==LOW);
+    /*if(timeNow-time0<10sec){
+      gameStart = true;
+      digitalWrite(L_ON,LOW);     
+      Serial.println("Go!");    
+    }*/
     gameStart = true;
     digitalWrite(L_ON,LOW);     
-    Serial.println("Go!"); 
+    Serial.println("Go!");
   }
   
 
-  if(generatedPattern == false && gameStart == true){
+  if(!generatedPattern && gameStart){
     generatePattern();
+    generatedPattern = true;
     Serial.println("displaying pattern");
+    //attachInterrupt(0,assignPenalty,RISING);
     displayPattern();
+    //detachInterrupt(0);    
   }
+
+
+  if(generatedPattern && !guessingPattern){
+    //delay(Time2);
+    //Serial.println("Time to guess!");
+    guessPattern();
+
+  }  
 }
 
 void generatePattern(){
   int i;
   Serial.println("values:");
-  for(i=0;i<factor*4;i++){
-    int value = ((int)random(4));
-    Serial.print(value);
-    Serial.print(" ");    
+  for(i=0;i<4;i++){
+    int value = ((int)random(n_leds));
+    Serial.print(value); 
+    Serial.print("="); 
     pattern[i]=value;
+    Serial.print(pattern[i]); 
+    Serial.print(" ");    
   }
-  generatedPattern = true;
   Serial.println();
 }
 
 void displayPattern(){
   int i=0;
-  for(;i<factor*4;i++){
+  for(;i<4;i++){
+    //L1 being the offset from pin 0
     digitalWrite(pattern[i]+L1,HIGH);
-    delay(500);
+    delay(Time1);
     digitalWrite(pattern[i]+L1,LOW);
-    delay(100);
+    //delay for visibility of same consecutive led
+    delay(80);
   }
 }
 
@@ -103,4 +135,89 @@ void waitingGameStart(){
   analogWrite(L_ON,brightness);
   delay(50);
 }
+void guessPattern(){
+  attachInterrupt(0,pinPolling,RISING);
+  //patternCounter = (factor*n_leds);
+  //buttonPressed = pattern;
+  if(patternCounter == (4) /*|| timeNow-time0 > Time3 */ ){
+    detachInterrupt(0);
+    //Serial.println("pattern inputted was: ");
+    int i;
+    for(i = 0; i < 4;i++){
+      Serial.print(buttonPressed[i]);
+      Serial.print(" ");
+    } 
+    Serial.println();
+    scoring();
+  }  
+}
 
+void pinPolling(){
+  int i;
+  for(i = T1; i < T1+n_buttons ; i++){
+    if(digitalRead(i)==HIGH){
+      //There shouldn't be the need for this since the Diods act as a block for multiple button pressing
+      //making it so that no more than 1 interrupt can be called simultaneously
+      noInterrupts();
+      buttonPressed[patternCounter]=(i-T1);
+      Serial.print("you pressed ");
+      Serial.println(buttonPressed[patternCounter]);      
+      patternCounter++;
+      Serial.print((factor*n_leds)-patternCounter);
+      Serial.println(" remaining");
+      interrupts();
+      detachInterrupt(0);
+      delay(100);
+      attachInterrupt(0,pinPolling,RISING);
+    }
+  }
+  delay(50);
+}
+
+void scoring(){
+  bool success = true;
+  int i;
+  for(i = 0; i < 4; i++){
+    Serial.print(pattern[i]);
+    Serial.print("\t");
+    Serial.print(buttonPressed[i]);
+    Serial.print("\t");
+    Serial.print(pattern[i]==buttonPressed[i]);
+    Serial.println();
+    if(pattern[i]!=buttonPressed[i]){
+      success = false;       
+    }    
+  }
+  if(success){
+    score++;
+    Serial.print("New point! Score: ");
+    Serial.println(score);
+    initializingVariables();
+  }
+  else{
+    assignPenalty();
+  }
+  
+}
+
+void wakeUpFunc(){
+
+}
+
+void assignPenalty(){
+  penalty++;
+  if(penalty >= 3){
+    Serial.print("Game Over. Final Score: ");
+    Serial.println(score);
+    delay(10*1000);
+    initializingVariables();
+  }
+  else{
+    digitalWrite(L_ON,HIGH);
+    Serial.println("Penalty!");
+    Serial.print("Current penalties: ");
+    Serial.println(penalty);
+    delay(1000);
+    digitalWrite(L_ON,LOW);
+  }
+}
