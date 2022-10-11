@@ -1,5 +1,6 @@
 #include<stdlib.h>
 #include<avr/sleep.h>
+#include<Bounce2.h>
 
 #define n_buttons 4
 #define n_leds 4
@@ -17,9 +18,9 @@
 #define L_ON 11
 #define POT A0
 
-#define Time1 700 //TODO implement macro
-#define Time2 100 //TODO implement macro
-#define Time3 10000 //TODO implement macro
+int Time1;
+int Time2;
+int Time3;
 
 int factor;
 bool gameStart;
@@ -32,8 +33,18 @@ int buttonPressed[4];
 int brightness;
 int fadeAmount;
 int patternCounter;
+
+Bounce buttons[4];
+
+unsigned long time0;
+
 void initializingVariables(){
   factor = (analogRead(POT)/256)+1;
+  
+  Time1 = (1/factor)*(10*1000);
+  Time2 = (1/factor)*(10*700);
+  Time3 = (1/factor)*(10*500); 
+   
   patternCounter=0;
   gameStart = false;
   generatedPattern = false;
@@ -55,6 +66,13 @@ void setup()
   for(i=T1;i<T1+n_buttons;i++){
     pinMode(i,INPUT);
   }
+
+  for(i = 0; i < 4; i++){
+    buttons[i]=Bounce();
+    buttons[i].attach(T1+i,INPUT);
+    buttons[i].interval(25);    
+  }
+
   pinMode(L_ON,OUTPUT);
   initializingVariables();
   
@@ -63,23 +81,19 @@ void setup()
 void loop()
 { 
   if(!gameStart){
-    //time0 = timeNow;
+    time0 = millis();
     do{
-      /*if(timeNow-time0>10sec){
-        attachInterrupt(0,wakeUpFunc,RISING); 
-        powernapTime();
-        break;
-      }*/
+      buttons[1].update();
       waitingGameStart();
-    }while(digitalRead(T1)==LOW);
-    /*if(timeNow-time0<10sec){
+    }while(buttons[1].read()==LOW && millis()-time0<(10*1000));
+    if(millis()-time0<(10*1000)){
       gameStart = true;
       digitalWrite(L_ON,LOW);     
       Serial.println("Go!");    
-    }*/
-    gameStart = true;
-    digitalWrite(L_ON,LOW);     
-    Serial.println("Go!");
+    }
+    else{
+      wakeUp();        
+    }
   }
   
 
@@ -87,9 +101,9 @@ void loop()
     generatePattern();
     generatedPattern = true;
     Serial.println("displaying pattern");
-    //attachInterrupt(0,assignPenalty,RISING);
     displayPattern();
-    //detachInterrupt(0);    
+    //this reset the timer for guessing the pattern
+    time0 = millis();
   }
 
 
@@ -102,9 +116,15 @@ void loop()
 }
 
 void generatePattern(){
-  int i;
+  int i,j;
   Serial.println("values:");
   for(i=0;i<4;i++){
+    for(j = 0; j < 4; j++){
+      buttons[j].update();
+      if(buttons[j].rose()){
+        assignPenalty();        
+      }      
+    }
     int value = ((int)random(n_leds));
     Serial.print(value); 
     Serial.print("="); 
@@ -200,8 +220,9 @@ void scoring(){
   
 }
 
-void wakeUpFunc(){
+void wakeUp(){
 
+  assignVariables();
 }
 
 void assignPenalty(){
