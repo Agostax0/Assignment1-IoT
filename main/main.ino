@@ -63,17 +63,15 @@ void setup()
   for(i=L1;i<L1+n_leds;i++){
     pinMode(i,OUTPUT);
   }
-  for(i=T1;i<T1+n_buttons;i++){
-    pinMode(i,INPUT);
-  }
 
-  for(i = 0; i < 4; i++){
+  for(i = 0; i < n_buttons; i++){
     buttons[i]=Bounce();
     buttons[i].attach(T1+i,INPUT);
     buttons[i].interval(25);    
   }
 
   pinMode(L_ON,OUTPUT);
+  
   initializingVariables();
   
 }
@@ -92,7 +90,7 @@ void loop()
       Serial.println("Go!");    
     }
     else{
-      wakeUp();        
+      goToSleep();        
     }
   }
   
@@ -219,10 +217,20 @@ void scoring(){
   }
   
 }
+void wakeUpNow(){}
+void goToSleep(){
+  Serial.println("Going to Sleep...");
+  Serial.flush();
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  sleep_enable();
 
-void wakeUp(){
+  attachInterrupt(1,wakeUpNow,RISING);
 
-  assignVariables();
+  sleep_mode();
+
+  sleep_disable();
+
+  detachInterrupt(1);
 }
 
 void assignPenalty(){
