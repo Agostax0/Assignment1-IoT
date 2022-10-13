@@ -17,6 +17,7 @@
 
 #define L_ON 11
 #define POT A0
+
 enum state {
   START,
   GENERATING,
@@ -24,16 +25,19 @@ enum state {
   POLLING,
   CHECKING,
 };
-int Time1;
-int Time2;
-int Time3;
 
-int factor;
+unsigned long Time1;
+/*Time for leds to stay on*/
+unsigned long Time2;
+/*Time to recreate the configuration*/
+unsigned long Time3;
+
+int factor = 1;
 int game_state;
 int score = 0;
-bool penalty_flag;
 int penalty;
 int pattern[4];
+int pattern_length;
 int buttonPressed[4];
 int brightness;
 int fadeAmount;
@@ -65,76 +69,85 @@ void setup()
 
   
   Serial.println("setup");
-  initializingVariables();
-  
+  initializeVariables();
+        
 }
 
 void loop()
 { 
-  if(game_state==START){
-    time0 = millis();
-    do{
-      buttons[0].update();
-      waitingGameStart();
-    }while(buttons[0].read()==LOW && millis()-time0<(10*1000));
-    if(millis()-time0<(10*1000)){
-      game_state++;
-      digitalWrite(L_ON,LOW);     
-      Serial.println("Go!"); 
-      Serial.println("Proceding to GENERATING PATTERN");
-      Serial.flush();  
-      
-    }
-    else{
-      goToSleep();        
+  if(game_state == START){
+    buttons[0].update();
+    if(buttons[0].read()==LOW && millis()-time0<(10*1000)){
+      waitingGameStart();     
+    }else{
+      if(millis()-time0<(10*1000)){
+        game_state++;
+        Serial.println("Proceding to GENERATING PATTERN");
+        digitalWrite(L_ON,LOW); 
+        time0 = millis();
+        counter = 0;
+        Serial.flush();  
+      }else{
+        digitalWrite(L_ON,LOW);
+        goToSleep();
+        time0 = millis();        
+      }
     }
   }
   
 
   if(game_state == GENERATING){
-    if(counter < 4){
-      counter++;
-      i_generatePattern();
+    if(millis()-time0 < Time1){
+      digitalWrite(counter,LOW);
+      counter = (counter+1) % 4;
+    }else{
+      if(counter < 4){
+        counter++;
+        i_generatePattern();
+      }else{
+        //TEST
+        for(int i = 0; i < n_leds; i++){
+          Serial.print(pattern[i]);
+          Serial.print(" ");
+        }                
+        Serial.println();
+
+        Serial.println("Proceding to DISPLAYING PATTERN");
+        Serial.flush(); 
+        counter = 0;
+        game_state++;
+        //millis for Time2 
+        time0 = millis();
+      }      
     }
-    else{
-      Serial.println("Proceding to DISPLAYING PATTERN");
-      Serial.flush(); 
-      counter = 0;
-      game_state++;
-      //millis for Time1 
-      time0 = millis();
-    }
+    
   }
 
   if(game_state == DISPLAYING){
-    if(counter < 4  || ((millis()-time0)<Time1)){
-      counter++;
+    if(counter < 4  || ((millis()-time0)<Time2)){
       i_displayPattern();
-    }
-    else{
+      counter++;
+    }else{
       for(int i = 0; i < 4 ; i++){
         digitalWrite(L1+i, LOW);
       }
       Serial.println("Proceding to POLLING");
       Serial.flush(); 
       counter = 0;
-      //game_state++;
+      game_state++;
       //Proceding to Guessing
-      //time0 = millis();
-      delay(20000);
-      game_state = START;
+      time0 = millis();
     }
     
   }
 
 
-  /*if(game_state == POLLING){
-    if(patternCounter != 4){
-      counter++;
-      counter = counter % 4;
-      i_guessPattern();
-    }
-    else{
+  if(game_state == POLLING){
+    
+    if(patternCounter != pattern_length && (millis()-time0<Time3)){
+      i_polling();
+      counter = (counter+1) % n_buttons;
+    }else{
       patternCounter = 0;
       Serial.println("Proceding to SCORING");
       Serial.flush(); 
@@ -144,43 +157,68 @@ void loop()
   }  
 
   if(game_state == CHECKING){
-    if(counter < 4){
+    bool res_flag = true;
+    if(counter < 4 && res_flag){
+      res_flag = i_scoring();
       counter++;
-      i_scoring();
-    }
-    else{
-      if(penalty_flag){
-        
+    }else{
+      if(res_flag){
+        //Score
+        score++;
+        Serial.print("New point! Score: ");
+        Serial.println(score);
+        Serial.flush();
+        Serial.println("Increasing Difficulty");
+        Serial.flush();
+        factor++;
+        initializeVariables();
+      }else{
+        //Penalty
+        penalty++;
+        if(penalty >= 3){
+          Serial.print("Game Over. Final Score: ");
+          Serial.println(score);
+          delay(10*1000);
+          initializeVariables();
+        }else{
+          digitalWrite(L_ON,HIGH);
+          Serial.println("Penalty");          
+          Serial.flush();
+          delay(1000);
+          digitalWrite(L_ON,LOW);
+        }
       }
-      Serial.println("Game Finished");
-      Serial.println("Proceding to GENERATING PATTERN");
-      Serial.flush(); 
-      counter = 0;
-      game_state = START;
-      //initializingVariables();      
     }
 
-  }*/
+  }
 }
-void initializingVariables(){
-  factor = (analogRead(POT)/256)+1;
+void initializeVariables(){
+  int L = (analogRead(POT)/256)+1;
   
-  Time1 = (10000);
+  int difficulty = factor * L;
+  
+  Time1 = (int)random(2000);
   
   Time2 = (1/factor)*(10*700);
   
-  Time3 = (1/sqrt(factor))*(10*500) * 4; 
+  Time3 = (1/sqrt(factor)) * (10*500) * 4; 
    
-  patternCounter=0;
+  patternCounter = 0;
+  pattern_length = 0;
   game_state = START;
 
   penalty = 0;
-  penalty_flag = false;
   
   brightness = 0;
   fadeAmount = 15;
 
   Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
+
+  for(int i = 0; i < n_buttons ; i++){
+    buttonPressed[i] = 0;
+  }
+
+  time0 = millis();
 }
 
 void waitingGameStart(){
@@ -193,46 +231,48 @@ void waitingGameStart(){
 }
 
 void i_generatePattern(){
+  Serial.flush();
   for(int j = 0; j < 4; j++){
       buttons[j].update();
       if(buttons[j].rose()){
-        assignPenalty();        
+        penalty++;       
       }      
   }
   int on = ((int)random(2));
+  pattern_length = (on) ? pattern_length + 1 : pattern_length;
   pattern[counter]=on;
-  if(counter == 3){
-    if(pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0){
-      pattern[3] = 1;
-    }
+  if(counter == 4 && pattern[0]==0 && pattern[1]==0 && pattern[2]==0 && pattern[3]==0){
+    int anti_all_zeros_scenario = (int)random(4);
+    pattern[anti_all_zeros_scenario] = 1;
   }
-  Serial.print(pattern[counter]); 
-  Serial.print(" ");  
 }
 
 void i_displayPattern(){
   for(int j = 0; j < 4; j++){
       buttons[j].update();
       if(buttons[j].rose()){
-        assignPenalty();        
+        penalty++;        
       }      
   }
   (pattern[counter]) ? digitalWrite(counter+L1,HIGH) : delay(1);  
-  //delay for visibility of same consecutive led
 }
 
-void i_guessPattern(){
-  buttons[counter].update();
-  if(buttons[counter].rose()){
-    buttonPressed[patternCounter] = counter;
-    patternCounter++;
+void i_polling(){
+  //This stop inputting more than the needed inputs.
+  if(patternCounter != n_buttons){
+    buttons[counter].update();
+    if(buttons[counter].rose()){
+      buttonPressed[counter] = 1;
+      patternCounter++;
+    }
   }
 }
 
-void i_scoring(){
-  if(pattern[counter] != buttonPressed[counter] && !penalty_flag){
-    penalty_flag = true;
-  }
+bool i_scoring(){
+  if(pattern[counter]!=buttonPressed[counter]){
+    return false;    
+  }  
+  return true;
 }
 void wakeUpNow(){}
 void goToSleep(){
@@ -251,23 +291,8 @@ void goToSleep(){
 
   Serial.println("Woke up..");
   Serial.flush();
-}
+  
+  delay(100);
 
-void assignPenalty(){
-  penalty++;
-  if(penalty >= 3){
-    Serial.print("Game Over. Final Score: ");
-    Serial.println(score);
-    delay(10*1000);
-    Serial.println("3 penalties");
-    //initializingVariables();
-  }
-  else{
-    digitalWrite(L_ON,HIGH);
-    Serial.println("Penalty!");
-    Serial.print("Current penalties: ");
-    Serial.println(penalty);
-    delay(1000);
-    digitalWrite(L_ON,LOW);
-  }
+  Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
 }
