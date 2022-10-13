@@ -1,4 +1,3 @@
-#include<stdlib.h>
 #include<avr/sleep.h>
 #include<math.h>
 #include<Bounce2.h>
@@ -50,6 +49,7 @@ unsigned long time0;
 void setup()
 {
   Serial.begin(9600);
+  randomSeed(analogRead(5));
   int i;
   for(i=L1;i<L1+n_leds;i++){
     pinMode(i,OUTPUT);
@@ -82,7 +82,8 @@ void loop()
       digitalWrite(L_ON,LOW);     
       Serial.println("Go!"); 
       Serial.println("Proceding to GENERATING PATTERN");
-      Serial.flush();   
+      Serial.flush();  
+      
     }
     else{
       goToSleep();        
@@ -100,27 +101,34 @@ void loop()
       Serial.flush(); 
       counter = 0;
       game_state++;
+      //millis for Time1 
+      time0 = millis();
     }
   }
 
   if(game_state == DISPLAYING){
-    if(counter < 4){
+    if(counter < 4  || ((millis()-time0)<Time1)){
       counter++;
       i_displayPattern();
     }
     else{
+      for(int i = 0; i < 4 ; i++){
+        digitalWrite(L1+i, LOW);
+      }
       Serial.println("Proceding to POLLING");
       Serial.flush(); 
       counter = 0;
-      game_state++;
+      //game_state++;
       //Proceding to Guessing
-      time0 = millis();
+      //time0 = millis();
+      delay(20000);
+      game_state = START;
     }
     
   }
 
 
-  if(game_state == POLLING){
+  /*if(game_state == POLLING){
     if(patternCounter != 4){
       counter++;
       counter = counter % 4;
@@ -152,12 +160,12 @@ void loop()
       //initializingVariables();      
     }
 
-  }
+  }*/
 }
 void initializingVariables(){
   factor = (analogRead(POT)/256)+1;
   
-  Time1 = (1000);
+  Time1 = (10000);
   
   Time2 = (1/factor)*(10*700);
   
@@ -191,8 +199,13 @@ void i_generatePattern(){
         assignPenalty();        
       }      
   }
-  int value = ((int)random(n_leds));
-  pattern[counter]=value;
+  int on = ((int)random(2));
+  pattern[counter]=on;
+  if(counter == 3){
+    if(pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0){
+      pattern[3] = 1;
+    }
+  }
   Serial.print(pattern[counter]); 
   Serial.print(" ");  
 }
@@ -204,11 +217,8 @@ void i_displayPattern(){
         assignPenalty();        
       }      
   }
-  digitalWrite(pattern[counter]+L1,HIGH);  
-  delay(Time1);
-  digitalWrite(pattern[counter]+L1,LOW);
+  (pattern[counter]) ? digitalWrite(counter+L1,HIGH) : delay(1);  
   //delay for visibility of same consecutive led
-  delay(80);
 }
 
 void i_guessPattern(){
