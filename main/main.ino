@@ -81,9 +81,9 @@ void loop()
   if(!gameStart){
     time0 = millis();
     do{
-      buttons[1].update();
+      buttons[0].update();
       waitingGameStart();
-    }while(buttons[1].read()==LOW && millis()-time0<(10*1000));
+    }while(buttons[0].read()==LOW && millis()-time0<(10*1000));
     if(millis()-time0<(10*1000)){
       gameStart = true;
       digitalWrite(L_ON,LOW);     
