@@ -39,6 +39,9 @@ int L;
 int game_state;
 int score = 0;
 int penalty;
+//TODO implement weighted led and button pattern style
+/*where each led is weighted like 1 2 4 8
+  and only the right button press allows it*/ 
 int pattern[4];
 int pattern_length;
 int buttonPressed[4];
@@ -51,7 +54,6 @@ int counter = 0;
 Bounce buttons[4];
 
 unsigned long time0;
-
 
 void setup() {
   Serial.begin(9600);
@@ -71,8 +73,6 @@ void setup() {
   pinMode(L_ON, OUTPUT);
 
   delay(150);
-  Serial.println("setup");
-  Serial.flush();
   initializeVariables();
 }
 
@@ -311,6 +311,7 @@ void initializeVariables() {
 
 void nextRound() {
   L = ((int)(analogRead(POT) / 256)) + 1;
+  randomSeed(random(5000));
 
   Time1 = (int)random(500, 2000);
   //1.0 is needed to box it to double so that the division doesn't approx to 0
@@ -328,6 +329,7 @@ void nextRound() {
 
   for (int i = 0; i < n_buttons; i++) {
     buttonPressed[i] = -1;
+    pattern[i] = 0;
   }
 
   time0 = millis();
