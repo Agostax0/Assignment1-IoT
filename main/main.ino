@@ -1,5 +1,7 @@
 #include <avr/sleep.h>
+#include <EnableInterrupt.h>
 #include <math.h>
+#include <stdlib.h>
 #include <Bounce2.h>
 
 #define n_buttons 4
@@ -53,7 +55,8 @@ unsigned long time0;
 
 void setup() {
   Serial.begin(9600);
-  randomSeed(analogRead(5));
+  int seed = analogRead(5);
+  randomSeed(seed);
   int i;
   for (i = L1; i < L1 + n_leds; i++) {
     pinMode(i, OUTPUT);
@@ -67,8 +70,9 @@ void setup() {
 
   pinMode(L_ON, OUTPUT);
 
-
+  delay(150);
   Serial.println("setup");
+  Serial.flush();
   initializeVariables();
 }
 
@@ -80,11 +84,10 @@ void loop() {
     } else {
       if (millis() - time0 < (10 * 1000)) {
         game_state = GENERATING;
-        Serial.println("Proceding to GENERATING PATTERN");
+        //Serial.println("Proceding to GENERATING PATTERN");
         digitalWrite(L_ON, LOW);
         time0 = millis();
         counter = 0;
-        //printState();
         Serial.flush();
       } else {
         digitalWrite(L_ON, LOW);
@@ -106,8 +109,20 @@ void loop() {
         counter++;
 
       } else {
-        Serial.println("Proceding to DISPLAYING PATTERN");
-        Serial.flush();
+        pattern_length = 0;
+        for (int i = 0; i < n_leds; i++) {
+          if (pattern[i]) {
+            pattern_length++;
+          }
+        }
+        if (pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0 && pattern[3] == 0) {
+          //Serial.println("Anti all zeros scenario");
+          int anti_all_zeros_scenario = (int)random(4);
+          pattern[anti_all_zeros_scenario] = 1;
+          pattern_length = 1;
+        }
+        //Serial.println("Proceding to DISPLAYING PATTERN");
+        //Serial.flush();
         counter = 0;
         game_state = DISPLAYING;
         //printState();
@@ -118,18 +133,17 @@ void loop() {
   }
 
   if (game_state == DISPLAYING) {
-    if (counter < 4 && ((millis() - time0) < Time2)) {
-      i_displayPattern();
-      counter = (counter + 1) % 4;
+    if (((millis() - time0) < Time2)) {
+      displayPattern();
     } else {
       for (int i = 0; i < 4; i++) {
         digitalWrite(L1 + i, LOW);
       }
-      Serial.println("Proceding to POLLING");
-      Serial.flush();
+      //Serial.println("Proceding to POLLING");
+      //Serial.flush();
       counter = 0;
       game_state = POLLING;
-      //printState();
+      patternCounter = 0;
       //Proceding to Guessing
       time0 = millis();
     }
@@ -142,8 +156,11 @@ void loop() {
       i_polling();
       counter = (counter + 1) % n_buttons;
     } else {
+      if (millis() - time0 < Time3) {
+        Serial.println("Time's up");
+      }
       patternCounter = 0;
-      Serial.println("Proceding to SCORING");
+      //Serial.println("Proceding to SCORING");
       Serial.flush();
       counter = 0;
       game_state = CHECKING;
@@ -163,59 +180,36 @@ void loop() {
       Serial.println("Increasing Difficulty");
       Serial.flush();
       factor++;
-      initializeVariables();
+      nextRound();
+      Serial.println("Next Round Starting...");
+      Serial.flush();
     } else {
       //Penalty
       penalty++;
       if (penalty >= 3) {
         Serial.print("Game Over. Final Score: ");
+        Serial.flush();
         Serial.println(score);
+        Serial.flush();
         delay(10 * 1000);
-        penalty = 0;
-        score = 0;
-        factor = 1;
         initializeVariables();
       } else {
         digitalWrite(L_ON, HIGH);
         Serial.println("Penalty");
+        Serial.flush();
         Serial.print("Current Penalties: ");
+        Serial.flush();
         Serial.println(penalty);
         Serial.flush();
         delay(1000);
         digitalWrite(L_ON, LOW);
-        initializeVariables();
+        nextRound();
+        Serial.println("Next Round Starting...");
+        Serial.flush();
       }
     }
+    //printState();
   }
-}
-void initializeVariables() {
-  L = ((int)(analogRead(POT) / 256)) + 1;
-
-  Time1 = (int)random(500, 2000);
-  //1.0 is needed to box it to double so that the division doesn't approx to 0
-
-  //As the game goes on Time2 and Time3 can reach 0
-  Time2 = ((1.0 / (L * factor)) * (5000));
-  Time3 = (1 / sqrt(L * factor)) * (10 * 250) * 4;
-  //This prevents any value below 250ms
-  Time2 = (Time2 > 250) ? Time2 : 250;
-  Time3 = (Time3 > 250) ? Time3 : 250;
-
-  patternCounter = 0;
-  pattern_length = 0;
-  game_state = START;
-
-
-  brightness = 0;
-  fadeAmount = 15;
-
-  Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
-
-  for (int i = 0; i < n_buttons; i++) {
-    buttonPressed[i] = -1;
-  }
-
-  time0 = millis();
 }
 
 void waitingGameStart() {
@@ -230,19 +224,15 @@ void waitingGameStart() {
 void i_generatePattern() {
   checkForPenalty();
   int on = ((int)random(2));
-  pattern_length = (on) ? pattern_length + 1 : pattern_length;
   pattern[counter] = on;
-  if (pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0 && pattern[3] == 0 && counter == n_leds - 1) {
-    Serial.println("Anti all zeros scenario");
-    int anti_all_zeros_scenario = (int)random(4);
-    pattern[anti_all_zeros_scenario] = 1;
-  }
 }
 
-void i_displayPattern() {
+void displayPattern() {
   checkForPenalty();
-  if (counter < 4) {
-    (pattern[counter]) ? digitalWrite(counter + L1, HIGH) : delay(1);
+  for (int i = 0; i < n_leds; i++) {
+    if (pattern[i]) {
+      digitalWrite(i + L1, HIGH);
+    }
   }
 }
 
@@ -251,6 +241,7 @@ void i_polling() {
   if (patternCounter != n_buttons) {
     buttons[counter].update();
     if (buttons[counter].rose()) {
+      //Serial.println("You pressed " + (String)counter);
       buttonPressed[counter] = 1;
       patternCounter++;
     }
@@ -276,13 +267,19 @@ void goToSleep() {
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   sleep_enable();
 
-  attachInterrupt(1, wakeUpNow, RISING);
+  enableInterrupt(T1, wakeUpNow, CHANGE);
+  enableInterrupt(T2, wakeUpNow, CHANGE);
+  enableInterrupt(T3, wakeUpNow, CHANGE);
+  enableInterrupt(T4, wakeUpNow, CHANGE);
 
   sleep_mode();
 
   sleep_disable();
 
-  detachInterrupt(1);
+  disableInterrupt(T1);
+  disableInterrupt(T2);
+  disableInterrupt(T3);
+  disableInterrupt(T4);
 
   Serial.println("Woke up..");
   Serial.flush();
@@ -299,13 +296,70 @@ void checkForPenalty() {
     }
   }
 }
-/*void printState() {
+void initializeVariables() {
+  penalty = 0;
+  score = 0;
+  factor = 1;
+
+  brightness = 0;
+  fadeAmount = 15;
+  nextRound();
+  game_state = START;
+
+  Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
+}
+
+void nextRound() {
+  L = ((int)(analogRead(POT) / 256)) + 1;
+
+  Time1 = (int)random(500, 2000);
+  //1.0 is needed to box it to double so that the division doesn't approx to 0
+
+  //As the game goes on Time2 and Time3 can reach 0
+  Time2 = 1.0 / sqrt((L * factor)) * (2500);
+  Time3 = (1 / sqrt(L * factor)) * (2500 * 4);
+  //This prevents any value below doable times
+  Time2 = (Time2 > 400) ? Time2 : 400;
+  Time3 = (Time3 > 600 * 4) ? Time3 : 600 * 4;
+
+  patternCounter = 0;
+  pattern_length = 0;
+  game_state = GENERATING;
+
+  for (int i = 0; i < n_buttons; i++) {
+    buttonPressed[i] = -1;
+  }
+
+  time0 = millis();
+}
+void printState() {
+  Serial.println("----------------------------------------");
   Serial.print("Current Pot: ");
   Serial.println(L);
   Serial.print("Current Factor: ");
   Serial.println(factor);
   Serial.print("Current game_state: ");
-  Serial.println(game_state);
+  switch (game_state) {
+    case START:
+      Serial.println("START");
+      break;
+    case GENERATING:
+      Serial.println("GENERATING");
+      break;
+    case DISPLAYING:
+      Serial.println("DISPLAYING");
+      break;
+    case POLLING:
+      Serial.println("POLLING");
+      break;
+    case CHECKING:
+      Serial.println("SCORING");
+      break;
+    default:
+      Serial.println("ERROR");
+      break;
+  }
+
   Serial.print("Current score: ");
   Serial.println(score);
   Serial.print("Current Penalties: ");
@@ -337,10 +391,10 @@ void checkForPenalty() {
   Serial.print("Current Time3: ");
   Serial.println(Time3);
 
-  Serial.println("Waiting T1 input to continue post-debug");
+  /*Serial.println("Waiting T1 input to continue post-debug");
   do{
     buttons[0].update();        
   }while(!buttons[0].rose());
-  time0 = millis();
+  time0 = millis();*/
   Serial.println("----------------------------------------");
-}*/
+}
