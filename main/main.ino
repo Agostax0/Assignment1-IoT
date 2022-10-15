@@ -79,7 +79,7 @@ void loop() {
       waitingGameStart();
     } else {
       if (millis() - time0 < (10 * 1000)) {
-        game_state=GENERATING;
+        game_state = GENERATING;
         Serial.println("Proceding to GENERATING PATTERN");
         digitalWrite(L_ON, LOW);
         time0 = millis();
@@ -109,7 +109,7 @@ void loop() {
         Serial.println("Proceding to DISPLAYING PATTERN");
         Serial.flush();
         counter = 0;
-        game_state=DISPLAYING;
+        game_state = DISPLAYING;
         //printState();
         //millis for Time2
         time0 = millis();
@@ -120,7 +120,7 @@ void loop() {
   if (game_state == DISPLAYING) {
     if (counter < 4 && ((millis() - time0) < Time2)) {
       i_displayPattern();
-      counter = (counter+1)%4;
+      counter = (counter + 1) % 4;
     } else {
       for (int i = 0; i < 4; i++) {
         digitalWrite(L1 + i, LOW);
@@ -128,7 +128,7 @@ void loop() {
       Serial.println("Proceding to POLLING");
       Serial.flush();
       counter = 0;
-      game_state=POLLING;
+      game_state = POLLING;
       //printState();
       //Proceding to Guessing
       time0 = millis();
@@ -146,7 +146,7 @@ void loop() {
       Serial.println("Proceding to SCORING");
       Serial.flush();
       counter = 0;
-      game_state=CHECKING;
+      game_state = CHECKING;
 
       //printState();
     }
@@ -154,7 +154,7 @@ void loop() {
 
   if (game_state == CHECKING) {
     //no need to check if the pattern is correct if the player racked up 3 or more penalties
-    if (penalty<3 && scoring()) {
+    if (penalty < 3 && scoring()) {
       //Score
       score++;
       Serial.print("New point! Score: ");
@@ -191,15 +191,15 @@ void loop() {
 void initializeVariables() {
   L = ((int)(analogRead(POT) / 256)) + 1;
 
-  Time1 = (int)random(500,2000);
+  Time1 = (int)random(500, 2000);
   //1.0 is needed to box it to double so that the division doesn't approx to 0
-    
+
   //As the game goes on Time2 and Time3 can reach 0
-  Time2 =((1.0 / (L*factor)) * (5000));
-  Time3 = (1 / sqrt(L*factor)) * (10 * 250) * 4;
+  Time2 = ((1.0 / (L * factor)) * (5000));
+  Time3 = (1 / sqrt(L * factor)) * (10 * 250) * 4;
   //This prevents any value below 250ms
-  Time2 = (Time2>250) ? Time2 : 250;
-  Time3 = (Time3>250) ? Time3 : 250;
+  Time2 = (Time2 > 250) ? Time2 : 250;
+  Time3 = (Time3 > 250) ? Time3 : 250;
 
   patternCounter = 0;
   pattern_length = 0;
@@ -232,7 +232,7 @@ void i_generatePattern() {
   int on = ((int)random(2));
   pattern_length = (on) ? pattern_length + 1 : pattern_length;
   pattern[counter] = on;
-  if (pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0 && pattern[3] == 0 && counter==n_leds-1) {
+  if (pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0 && pattern[3] == 0 && counter == n_leds - 1) {
     Serial.println("Anti all zeros scenario");
     int anti_all_zeros_scenario = (int)random(4);
     pattern[anti_all_zeros_scenario] = 1;
@@ -291,7 +291,7 @@ void goToSleep() {
 
   Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
 }
-void checkForPenalty(){
+void checkForPenalty() {
   for (int j = 0; j < 4; j++) {
     buttons[j].update();
     if (buttons[j].rose()) {
