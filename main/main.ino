@@ -33,6 +33,7 @@ unsigned long Time2;
 unsigned long Time3;
 
 int factor = 1;
+int L;
 int game_state;
 int score = 0;
 int penalty;
@@ -83,7 +84,7 @@ void loop() {
         digitalWrite(L_ON, LOW);
         time0 = millis();
         counter = 0;
-        printState();
+        //printState();
         Serial.flush();
       } else {
         digitalWrite(L_ON, LOW);
@@ -109,7 +110,7 @@ void loop() {
         Serial.flush();
         counter = 0;
         game_state=DISPLAYING;
-        printState();
+        //printState();
         //millis for Time2
         time0 = millis();
       }
@@ -117,9 +118,9 @@ void loop() {
   }
 
   if (game_state == DISPLAYING) {
-    if (counter < 4 || ((millis() - time0) < Time2)) {
+    if (counter < 4 && ((millis() - time0) < Time2)) {
       i_displayPattern();
-      counter = (counter == 4) ? counter : counter + 1;
+      counter = (counter+1)%4;
     } else {
       for (int i = 0; i < 4; i++) {
         digitalWrite(L1 + i, LOW);
@@ -128,7 +129,7 @@ void loop() {
       Serial.flush();
       counter = 0;
       game_state=POLLING;
-      printState();
+      //printState();
       //Proceding to Guessing
       time0 = millis();
     }
@@ -152,7 +153,8 @@ void loop() {
   }
 
   if (game_state == CHECKING) {
-    if (scoring()) {
+    //no need to check if the pattern is correct if the player racked up 3 or more penalties
+    if (penalty<3 && scoring()) {
       //Score
       score++;
       Serial.print("New point! Score: ");
@@ -169,6 +171,9 @@ void loop() {
         Serial.print("Game Over. Final Score: ");
         Serial.println(score);
         delay(10 * 1000);
+        penalty = 0;
+        score = 0;
+        factor = 1;
         initializeVariables();
       } else {
         digitalWrite(L_ON, HIGH);
@@ -184,21 +189,22 @@ void loop() {
   }
 }
 void initializeVariables() {
-  int L = (analogRead(POT) / 256) + 1;
+  L = ((int)(analogRead(POT) / 256)) + 1;
 
-  int difficulty = factor * L;
-
-  Time1 = (int)random(2000);
-
-  Time2 = (1 / difficulty) * (10 * 700);
-
-  Time3 = (1 / sqrt(difficulty)) * (10 * 500) * 4;
+  Time1 = (int)random(500,2000);
+  //1.0 is needed to box it to double so that the division doesn't approx to 0
+    
+  //As the game goes on Time2 and Time3 can reach 0
+  Time2 =((1.0 / (L*factor)) * (5000));
+  Time3 = (1 / sqrt(L*factor)) * (10 * 250) * 4;
+  //This prevents any value below 250ms
+  Time2 = (Time2>250) ? Time2 : 250;
+  Time3 = (Time3>250) ? Time3 : 250;
 
   patternCounter = 0;
   pattern_length = 0;
   game_state = START;
 
-  penalty = 0;
 
   brightness = 0;
   fadeAmount = 15;
@@ -214,7 +220,7 @@ void initializeVariables() {
 
 void waitingGameStart() {
   brightness = brightness + fadeAmount;
-  if (brightness == 0 || brightness == 255) {
+  if (brightness <= 0 || brightness >= 255) {
     fadeAmount = fadeAmount * (-1);
   }
   analogWrite(L_ON, brightness);
@@ -222,17 +228,11 @@ void waitingGameStart() {
 }
 
 void i_generatePattern() {
-  Serial.flush();
-  for (int j = 0; j < 4; j++) {
-    buttons[j].update();
-    if (buttons[j].rose()) {
-      penalty++;
-    }
-  }
+  checkForPenalty();
   int on = ((int)random(2));
   pattern_length = (on) ? pattern_length + 1 : pattern_length;
   pattern[counter] = on;
-  if (pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0 && pattern[3] == 0) {
+  if (pattern[0] == 0 && pattern[1] == 0 && pattern[2] == 0 && pattern[3] == 0 && counter==n_leds-1) {
     Serial.println("Anti all zeros scenario");
     int anti_all_zeros_scenario = (int)random(4);
     pattern[anti_all_zeros_scenario] = 1;
@@ -240,12 +240,7 @@ void i_generatePattern() {
 }
 
 void i_displayPattern() {
-  for (int j = 0; j < 4; j++) {
-    buttons[j].update();
-    if (buttons[j].rose()) {
-      penalty++;
-    }
-  }
+  checkForPenalty();
   if (counter < 4) {
     (pattern[counter]) ? digitalWrite(counter + L1, HIGH) : delay(1);
   }
@@ -254,7 +249,6 @@ void i_displayPattern() {
 void i_polling() {
   //This stop inputting more than the needed inputs.
   if (patternCounter != n_buttons) {
-    //printState();
     buttons[counter].update();
     if (buttons[counter].rose()) {
       buttonPressed[counter] = 1;
@@ -264,9 +258,9 @@ void i_polling() {
 }
 
 bool scoring() {
-  printState();
   bool result = true;
   for (int i = 0; i < n_buttons; i++) {
+    //if the led was on it checks if the corresponding button was pressed
     if (pattern[i] && pattern[i] != buttonPressed[i]) {
       Serial.println("Wrong sequence");
       return false;
@@ -297,8 +291,17 @@ void goToSleep() {
 
   Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
 }
-
-void printState() {
+void checkForPenalty(){
+  for (int j = 0; j < 4; j++) {
+    buttons[j].update();
+    if (buttons[j].rose()) {
+      penalty++;
+    }
+  }
+}
+/*void printState() {
+  Serial.print("Current Pot: ");
+  Serial.println(L);
   Serial.print("Current Factor: ");
   Serial.println(factor);
   Serial.print("Current game_state: ");
@@ -340,4 +343,4 @@ void printState() {
   }while(!buttons[0].rose());
   time0 = millis();
   Serial.println("----------------------------------------");
-}
+}*/
