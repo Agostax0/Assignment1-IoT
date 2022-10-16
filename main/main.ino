@@ -41,7 +41,7 @@ int score = 0;
 int penalty;
 //TODO implement weighted led and button pattern style
 /*where each led is weighted like 1 2 4 8
-  and only the right button press allows it*/ 
+  and only the right button press allows it*/
 int pattern[4];
 int pattern_length;
 int buttonPressed[4];
@@ -72,11 +72,16 @@ void setup() {
 
   pinMode(L_ON, OUTPUT);
 
-  delay(150);
+  
   initializeVariables();
 }
 
 void loop() {
+  if(millis()==0){
+    delay(150);
+
+    Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
+  }
   if (game_state == START) {
     buttons[0].update();
     if (buttons[0].read() == LOW && millis() - time0 < (10 * 1000)) {
@@ -156,7 +161,7 @@ void loop() {
       i_polling();
       counter = (counter + 1) % n_buttons;
     } else {
-      if (millis() - time0 < Time3) {
+      if (millis() - time0 > Time3) {
         Serial.println("Time's up");
       }
       patternCounter = 0;
@@ -193,6 +198,7 @@ void loop() {
         Serial.flush();
         delay(10 * 1000);
         initializeVariables();
+        Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
       } else {
         digitalWrite(L_ON, HIGH);
         Serial.println("Penalty");
@@ -306,11 +312,25 @@ void initializeVariables() {
   nextRound();
   game_state = START;
 
-  Serial.println("Welcome to the Catch the Led Pattern Game. Press Key T1 to Start");
+  
 }
 
 void nextRound() {
   L = ((int)(analogRead(POT) / 256)) + 1;
+  switch (L) {
+    case 1:
+      fadeAmount = 4;
+      break;
+    case 2:
+      fadeAmount = 8;
+      break;
+    case 3:
+      fadeAmount = 12;
+      break;
+    default:
+      fadeAmount = 15;
+      break;
+  }
   randomSeed(random(5000));
 
   Time1 = (int)random(500, 2000);
